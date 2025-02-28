@@ -4,9 +4,9 @@ import logging
 from websocket_trades import run_websocket
 from web_dashboard import process_trades
 from mysql_storage import process_mysql
-from fetch_data import fetch_data
-from organize_data import organize_data
-from send_to_n8n import send_to_n8n
+from fetch_data import fetch_data  # Assuming fetch_data.py exists
+from organize_data import organize_data  # Assuming organize_data.py exists
+from send_to_n8n import send_to_n8n  # Assuming send_to_n8n.py exists
 
 # Configure logging for main.py
 logger = logging.getLogger("main")
@@ -30,10 +30,13 @@ def run_data_pipeline():
     while True:
         try:
             fetch_data()
+            logger.info("Fetched data from MySQL")
             organize_data()
+            logger.info("Organized data into JSON")
             send_to_n8n()
+            logger.info("Sent data to n8n")
             logger.info("Data pipeline cycle completed (fetch -> organize -> send)")
-            time.sleep(60)  # Run every 60 seconds
+            time.sleep(15)  # Run every 15 seconds
         except Exception as e:
             logger.error(f"Error in data pipeline: {e}")
             time.sleep(10)  # Wait before retrying on error

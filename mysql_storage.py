@@ -6,6 +6,8 @@ import logging
 from datetime import datetime
 from threading import Thread
 
+import pytz
+
 # Create a queue in this module since it's not defined in web_dashboard
 from web_dashboard import mysql_queue
 
@@ -60,7 +62,7 @@ try:
             id INT AUTO_INCREMENT PRIMARY KEY,
             symbol VARCHAR(255),
             current_price DECIMAL(20, 8),
-            timestamp DATETIME,
+            timestamp DATETIME(6),
             trend VARCHAR(10),
             buy_score INT,
             sell_score INT,
@@ -95,7 +97,8 @@ def store_data(data):
         logger.error("No MySQL connection available")
         return False
     try:
-        timestamp_dt = datetime.strptime(data['timestamp'], '%Y-%m-%d %H:%M:%S')
+        utc_time = datetime.strptime(data['timestamp'], '%Y-%m-%d %H:%M:%S')
+        timestamp_dt = utc_time.replace(tzinfo=pytz.UTC)
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO pi_trades (
@@ -134,15 +137,27 @@ def store_data(data):
         conn.commit()
         timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
         logger.info(f"Stored data for {data['symbol']} at {data['timestamp']}")
-        # ... (detailed_logger unchanged) ...
+        detailed_logger.info(
+            "Stored data in MySQL",
+            extra={
+                'data_received': json.dumps(data),
+                'time': timestamp,
+                'next_step': 'Data available for n8n/AI processing'
+            }
+        )
         return True
     except mysql.connector.Error as err:
-        logger.error(f"Failed to store data in MySQL: {err} - Data: {json.dumps(data)}")
+        logger.error(f"Failed to store data in MySQL: {err}")
         if not conn.is_connected():
-            # ... (reconnect logic unchanged) ...
-            return False
+            logger.warning("MySQL connection lost. Attempting to reconnect...")
+            try:
+                conn.reconnect(attempts=3, delay=5)
+                logger.info("Reconnected to MySQL successfully")
+            except mysql.connector.Error as reconnect_err:
+                logger.error(f"Failed to reconnect to MySQL: {reconnect_err}")
+        return False
     except ValueError as ve:
-        logger.error(f"Timestamp parsing error: {ve} - Data: {json.dumps(data)}")
+        logger.error(f"Timestamp parsing error: {ve}")
         return False
 
 def process_mysql():
